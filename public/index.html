@@ -1,0 +1,1852 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Lens</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%2358a6ff'/><path d='M9 10l5 6-5 6' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/><line x1='16' y1='22' x2='23' y2='22' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   RESET & VARS
+   ═══════════════════════════════════════════════ */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg:        #0d1117;
+  --bg-panel:  #161b22;
+  --bg-input:  #0d1117;
+  --border:    #30363d;
+  --text:      #e6edf3;
+  --muted:     #8b949e;
+  --dim:       #484f58;
+
+  --accent:    #58a6ff;
+  --success:   #3fb950;
+  --warning:   #d29922;
+  --danger:    #f85149;
+
+  --code:      #d29922;
+  --expl:      #58a6ff;
+  --port:      #3fb950;
+  --sint:      #f85149;
+
+  --radius:    8px;
+  --font-ui:   'Inter', -apple-system, sans-serif;
+  --font-code: 'JetBrains Mono', monospace;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════ */
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+  z-index: 10;
+}
+.logo {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--accent), var(--code));
+  border-radius: 8px;
+  display: grid; place-items: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.logo-area strong { font-size: 0.95rem; font-weight: 700; letter-spacing: -0.01em; }
+.logo-area span { display: block; font-size: 0.65rem; color: var(--muted); }
+
+.header-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+.model-tag {
+  font-size: 0.65rem;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+.model-tag strong { color: var(--accent); }
+
+/* ═══════════════════════════════════════════════
+   EXAMPLES BAR
+   ═══════════════════════════════════════════════ */
+.examples-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+.examples-bar label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.examples-bar select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  cursor: pointer;
+  outline: none;
+}
+.examples-bar select:focus { border-color: var(--accent); }
+.examples-hint {
+  font-size: 0.65rem;
+  color: var(--dim);
+  margin-left: auto;
+}
+
+/* ═══════════════════════════════════════════════
+   MAIN LAYOUT
+   ═══════════════════════════════════════════════ */
+.main {
+  flex: 1;
+  display: flex;
+  gap: 0;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── LEFT: Editor ── */
+.editor-side {
+  width: 45%;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+.editor-toolbar .lang-badge {
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: rgba(88,166,255,0.12);
+  color: var(--accent);
+  border: 1px solid rgba(88,166,255,0.25);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.editor-toolbar .lang-badge.py  { background: rgba(63,185,80,0.12);  color: var(--success); border-color: rgba(63,185,80,0.25); }
+.editor-toolbar .lang-badge.ts  { background: rgba(88,166,255,0.12); color: var(--accent);  border-color: rgba(88,166,255,0.25); }
+.editor-toolbar .lang-badge.ptg { background: rgba(210,153,34,0.12); color: var(--code);    border-color: rgba(210,153,34,0.25); }
+.editor-toolbar .lang-badge.css { background: rgba(63,185,80,0.12);  color: var(--success); border-color: rgba(63,185,80,0.25); }
+.editor-toolbar .lang-badge.sql { background: rgba(210,153,34,0.12); color: var(--code);    border-color: rgba(210,153,34,0.25); }
+
+.toolbar-space { flex: 1; }
+
+.btn {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: none;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary   { background: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #79bbff; }
+.btn-success   { background: var(--success); color: #0d1117; }
+.btn-success:hover:not(:disabled) { background: #56d364; }
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+.btn-ghost.ativo { color: var(--success); border-color: var(--success); background: rgba(63,185,80,0.1); }
+
+/* ── Editor area ── */
+.editor-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.editor-hl-back {
+  position: absolute; inset: 0;
+  font-family: var(--font-code);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  padding: 16px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+  pointer-events: none;
+  color: transparent;
+  z-index: 1;
+}
+.editor-wrap textarea {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  background: transparent !important;
+  color: transparent !important;
+  caret-color: #58a6ff !important;
+  font-family: var(--font-code);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  padding: 16px;
+  tab-size: 2;
+  border: none;
+  outline: none;
+  resize: none;
+  spellcheck: false;
+  z-index: 2;
+}
+.editor-wrap textarea::selection {
+  background: rgba(88,166,255,0.3);
+  color: transparent;
+}
+.editor-wrap textarea::placeholder {
+  color: var(--dim);
+  font-style: italic;
+}
+
+/* syntax tokens */
+.hl-keyword  { color: #c678dd; }
+.hl-builtin  { color: #61afef; }
+.hl-string   { color: #98c379; }
+.hl-template  { color: #98c379; }
+.hl-number   { color: #d19a66; }
+.hl-comment  { color: #5c6370; font-style: italic; }
+.hl-operator { color: #56b6c2; }
+.hl-punctuation { color: #56b6c2; }
+.hl-property { color: #e5c07b; }
+.hl-method   { color: #61afef; }
+.hl-boolean  { color: #e06c75; }
+.hl-null     { color: #e06c75; }
+.hl-regex    { color: #e06c75; }
+.hl-plain    { color: #abb2bf; }
+
+/* ── Explicação auto ── */
+.exp-auto {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: rgba(88,166,255,0.04);
+  display: none;
+}
+.exp-auto.visivel { display: block; }
+.exp-auto-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 0.68rem; font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.exp-auto-header:hover { background: rgba(88,166,255,0.06); }
+.exp-auto-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0;
+}
+.exp-auto-toggle { margin-left: auto; font-size: 0.6rem; color: var(--dim); }
+.exp-auto-body {
+  padding: 6px 14px 12px;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: #b0d8e8;
+  display: none;
+}
+.exp-auto-body.aberto { display: block; }
+.exp-auto-loading {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--muted); font-style: italic; font-size: 0.78rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.ea-spinner {
+  width: 12px; height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ── Actions bar under editor ── */
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+.editor-actions .status {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-left: auto;
+  display: flex; align-items: center; gap: 6px;
+}
+.status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--dim);
+  transition: background 0.3s;
+}
+.status-dot.ok { background: var(--success); }
+.status-dot.loading { background: var(--code); animation: pulse 1s infinite; }
+.status-dot.erro { background: var(--danger); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+/* ═══════════════════════════════════════════════
+   RIGHT: Output tabs
+   ═══════════════════════════════════════════════ */
+.output-side {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+.tab {
+  padding: 8px 18px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+  user-select: none;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.tab.tab-exp.active   { border-bottom-color: var(--expl);   color: var(--expl); }
+.tab.tab-port.active  { border-bottom-color: var(--port);  color: var(--port); }
+.tab.tab-sint.active  { border-bottom-color: var(--sint);  color: var(--sint); }
+.tab.tab-console.active { border-bottom-color: var(--success); color: var(--success); }
+
+.tab-badge {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--dim);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.tab-badge.has-content { background: var(--success); }
+
+.tab-content {
+  flex: 1;
+  overflow-y: auto;
+  display: none;
+  min-height: 0;
+}
+.tab-content.active { display: flex; flex-direction: column; }
+
+/* Tab panels */
+.tab-panel {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.tab-panel textarea {
+  flex: 1;
+  width: 100%;
+  background: var(--bg-input);
+  color: var(--text);
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: var(--font-code);
+  font-size: 0.83rem;
+  line-height: 1.7;
+  padding: 16px;
+  tab-size: 2;
+  display: block;
+}
+.tab-panel textarea::placeholder { color: var(--dim); font-style: italic; }
+
+.tab-panel .empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  padding: 40px;
+  text-align: center;
+}
+.empty-state-icon { font-size: 2.4rem; opacity: 0.2; }
+.empty-state-text {
+  font-size: 0.83rem;
+  color: var(--dim);
+  max-width: 350px;
+  line-height: 1.6;
+}
+.empty-state-text strong { color: var(--muted); }
+
+/* ── Toolbar dentro das abas ── */
+.tab-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+.tab-toolbar .tab-toolbar-spacer { flex: 1; }
+.tab-toolbar .tab-toolbar-info {
+  font-size: 0.68rem;
+  color: var(--dim);
+}
+
+/* Syntax tab — formatted output */
+.sintaxe-output {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  font-family: var(--font-code);
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+.sintaxe-output .badge-ok {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(63,185,80,0.12);
+  border: 1px solid rgba(63,185,80,0.25);
+  color: var(--success); padding: 8px 16px; border-radius: 8px;
+  font-weight: 600; font-size: 0.83rem;
+}
+.sintaxe-output.visivel {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: var(--bg-input);
+  overflow-y: auto;
+  pointer-events: none;
+}
+.sintaxe-output.visivel > * {
+  pointer-events: auto;
+}
+.sintaxe-output .erro-linha {
+  color: var(--sint); font-weight: 700;
+  margin-bottom: 8px;
+}
+.sintaxe-output .label-correto {
+  color: var(--success); font-weight: 700;
+  margin: 14px 0 8px;
+}
+.sintaxe-output pre {
+  border-radius: 8px; padding: 12px 14px;
+  overflow-x: auto; white-space: pre-wrap;
+  word-break: break-word; font-size: 0.79rem; line-height: 1.65;
+  margin: 8px 0;
+}
+.sintaxe-output .pre-erro { background: rgba(248,81,73,0.06); border-left: 3px solid var(--danger); }
+.sintaxe-output .pre-ok  { background: rgba(63,185,80,0.06);  border-left: 3px solid var(--success); }
+.sintaxe-output .texto-simples { color: var(--muted); font-size: 0.79rem; margin-bottom: 8px; font-family: var(--font-ui); }
+.real-exec-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 6px; font-size: 0.78rem; font-weight: 600;
+  margin-bottom: 12px;
+}
+.real-exec-badge.ok  { background: rgba(63,185,80,0.1);  color: var(--success); border: 1px solid rgba(63,185,80,0.2); }
+.real-exec-badge.err { background: rgba(248,81,73,0.1); color: var(--danger);  border: 1px solid rgba(248,81,73,0.2); }
+
+/* ── Erro didático (cards) ── */
+.erro-card {
+  background: rgba(248,81,73,0.04);
+  border: 1px solid rgba(248,81,73,0.15);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.erro-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.erro-card-linha {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--danger);
+  background: rgba(248,81,73,0.1);
+  padding: 2px 10px;
+  border-radius: 5px;
+  font-family: var(--font-code);
+}
+.erro-card-orig {
+  background: rgba(248,81,73,0.08);
+  border-left: 3px solid var(--danger);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: var(--font-code);
+  font-size: 0.78rem;
+  color: #fca5a5;
+  margin: 6px 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+.erro-card-explicacao {
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  color: var(--text);
+  line-height: 1.6;
+  margin: 8px 0;
+}
+.erro-card-correcao-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--success);
+  margin-top: 10px;
+}
+.erro-card-correcao {
+  background: rgba(63,185,80,0.06);
+  border-left: 3px solid var(--success);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: var(--font-code);
+  font-size: 0.78rem;
+  color: #bbf7d0;
+  margin-top: 4px;
+  overflow-x: auto;
+  white-space: pre;
+}
+.erro-card-correcao-full {
+  margin-top: 16px;
+}
+.erro-card-correcao-full pre {
+  margin: 0;
+}
+
+/* ── Console ── */
+.console-topbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+.console-title {
+  font-size: 0.68rem; font-weight: 700;
+  color: var(--success);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.console-topbar-spacer { flex: 1; }
+.btn-clear-console {
+  font-size: 0.62rem; color: var(--muted); background: none; border: none;
+  cursor: pointer; padding: 2px 8px; border-radius: 4px; font-family: inherit;
+}
+.btn-clear-console:hover { color: var(--danger); }
+
+.console-body {
+  flex: 1; overflow-y: auto; padding: 6px 0;
+  font-family: var(--font-code); font-size: 0.78rem; line-height: 1.6;
+  min-height: 0;
+}
+.console-entry {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 3px 14px;
+}
+.console-entry:hover { background: rgba(255,255,255,0.02); }
+.console-prefix {
+  flex-shrink: 0; font-size: 0.65rem; font-weight: 700;
+  width: 16px; text-align: right; margin-top: 1px; opacity: 0.7;
+}
+.console-text { flex: 1; word-break: break-word; white-space: pre-wrap; }
+
+.c-log    .console-prefix { color: #a0a0c0; } .c-log    .console-text { color: #d0d0e8; }
+.c-error  .console-prefix { color: #f85149; } .c-error  .console-text { color: #f87171; }
+.c-warn   .console-prefix { color: #d29922; } .c-warn   .console-text { color: #d29922; }
+.c-info   .console-prefix { color: #58a6ff; } .c-info   .console-text { color: #93c5fd; }
+.c-result .console-prefix { color: #3fb950; } .c-result .console-text { color: #3fb950; font-weight: 600; }
+.c-lang   .console-prefix { color: #8b949e; } .c-lang   .console-text { color: #6b6b8a; font-style: italic; }
+
+.console-separator { border: none; border-top: 1px solid rgba(255,255,255,0.04); margin: 6px 14px; }
+.console-empty { padding: 20px 14px; color: var(--dim); font-size: 0.72rem; font-style: italic; text-align: center; }
+.console-run-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 14px 3px;
+  font-size: 0.62rem; color: var(--dim);
+  border-top: 1px solid rgba(255,255,255,0.04);
+  margin-top: 4px;
+}
+.console-run-ts { margin-left: auto; font-family: var(--font-code); }
+
+/* ── Loading overlay ── */
+.loading-overlay {
+  position: absolute; inset: 0;
+  background: rgba(13,17,23,0.7);
+  backdrop-filter: blur(2px);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 20;
+  border-radius: var(--radius);
+}
+.loading-overlay.ativo { display: flex; }
+.spinner {
+  width: 28px; height: 28px;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  border-top-color: var(--accent);
+}
+.loading-texto { font-size: 0.74rem; color: var(--muted); font-style: italic; }
+
+/* ═══════════════════════════════════════════════
+   KBD HELPER
+   ═══════════════════════════════════════════════ */
+kbd {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 5px;
+  font-family: var(--font-code); font-size: 0.65rem; color: var(--muted);
+}
+
+/* ═══════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════ */
+@media (max-width: 860px) {
+  .main { flex-direction: column; }
+  .editor-side {
+    width: 100%; min-width: 0;
+    max-height: 50vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .examples-hint { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ HEADER ═══════════ -->
+<header>
+  <div class="logo"></div>
+  <div class="logo-area">
+    <strong>Code Lens</strong>
+    <span>Escreva cdigo em qualquer linguagem &middot; A IA gera explicao, pseudocdigo e anlise de sintaxe</span>
+  </div>
+  <div class="header-actions">
+    <span class="model-tag"><strong>Ollama</strong> qwen2.5:1.5b</span>
+    <button class="btn btn-success" style="font-size:0.72rem" onclick="executarCodigo()" title="Ctrl+Shift+Enter">Executar</button>
+  </div>
+</header>
+
+<!-- ═══════════ EXAMPLES BAR ═══════════ -->
+<div class="examples-bar">
+  <label>Exemplos:</label>
+  <select id="exampleSelect" onchange="carregarExemplo()">
+    <option value="">-- Escolha um exemplo para estudar --</option>
+    <optgroup label="JavaScript">
+      <option value="hello">Ol Mundo</option>
+      <option value="loop">Loop e Condicionais</option>
+      <option value="array">Manipulao de Array</option>
+      <option value="funcoes">Funes e Closure</option>
+      <option value="classes">Classes e Objtos</option>
+      <option value="async">Async / Await</option>
+    </optgroup>
+    <optgroup label="Python">
+      <option value="py_hello">Ol Mundo Python</option>
+      <option value="py_func">Funes com Tipagem</option>
+      <option value="py_list">List Comprehension</option>
+    </optgroup>
+    <optgroup label="Portugol">
+      <option value="pt_algoritmo">Algoritmo com SE/ENTO</option>
+      <option value="pt_loop">Algoritmo com ENQUANTO</option>
+    </optgroup>
+    <optgroup label="SQL">
+      <option value="sql_basico">SELECT com WHERE</option>
+    </optgroup>
+  </select>
+  <span class="examples-hint">Preencha o editor e clique em <strong>Gerar com IA</strong></span>
+</div>
+
+<!-- ═══════════ MAIN ═══════════ -->
+<div class="main">
+
+  <!-- ── LEFT: Editor ── -->
+  <div class="editor-side">
+    <div class="editor-toolbar">
+      <span class="lang-badge" id="langBadge">JS</span>
+      <button class="btn btn-ghost" id="btnTempoReal" onclick="toggleTempoReal()" title="Atualiza tudo enquanto digita">
+        <span class="tr-dot" style="width:6px;height:6px;border-radius:50%;background:var(--dim);display:inline-block;transition:background 0.2s" id="trDot"></span>
+        Tempo real
+      </button>
+      <div class="toolbar-space"></div>
+      <button class="btn btn-primary" id="btnGerar" onclick="gerar('codigo')">Gerar com IA</button>
+    </div>
+
+    <div class="editor-wrap" id="editorWrap">
+      <div class="editor-hl-back" id="editorHlBack" aria-hidden="true"></div>
+      <textarea id="t-codigo" placeholder="// Escreva ou cole cdigo aqui...
+// Tente: selecione um Exemplo acima
+
+function fibonacci(n) {
+  if (n <= 1) return n;
+  return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+for (let i = 0; i < 10; i++) {
+  console.log(fibonacci(i));
+}" spellcheck="false" autocorrect="off" autocapitalize="off"></textarea>
+    </div>
+
+    <!-- Explicao auto -->
+    <div class="exp-auto" id="explicacaoAutoWrap">
+      <div class="exp-auto-header" onclick="toggleExplicacaoAuto()">
+        <span class="exp-auto-dot"></span>
+        <span>Explicao em Portugus</span>
+        <span class="exp-auto-toggle" id="explicacaoAutoToggle">▲ ver</span>
+      </div>
+      <div class="exp-auto-body" id="explicacaoAutoBody"></div>
+    </div>
+
+    <div class="editor-actions">
+      <span class="status">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusMsg">Pronto</span>
+      </span>
+      <button class="btn btn-ghost" style="font-size:0.68rem" onclick="limparTudo()">Limpar</button>
+    </div>
+  </div>
+
+  <!-- ── RIGHT: Output tabs ── -->
+  <div class="output-side">
+    <div class="tab-bar">
+      <div class="tab tab-exp active" data-tab="explicacao" onclick="switchTab('explicacao')">
+        Explicao <span class="tab-badge" id="badge-explicacao"></span>
+      </div>
+      <div class="tab tab-port" data-tab="portugues" onclick="switchTab('portugues')">
+        Em Portugus <span class="tab-badge" id="badge-portugues"></span>
+      </div>
+      <div class="tab tab-sint" data-tab="sintaxe" onclick="switchTab('sintaxe')">
+        Sintaxe <span class="tab-badge" id="badge-sintaxe"></span>
+      </div>
+      <div class="tab tab-console" data-tab="console" onclick="switchTab('console')">
+        Console <span class="tab-badge" id="badge-console"></span>
+      </div>
+    </div>
+
+    <!-- Tab: Explicao -->
+    <div class="tab-content active" id="tab-explicacao">
+      <div class="tab-panel">
+        <div class="tab-toolbar">
+          <span class="tab-toolbar-info">Descreva o que o cdigo deve fazer ou cole uma explicao.</span>
+          <div class="tab-toolbar-spacer"></div>
+          <button class="btn btn-success" onclick="gerar('explicacao')">Gerar com IA</button>
+        </div>
+        <textarea id="t-explicacao" placeholder="Ex: quero uma funo que receba um array de notas e retorne os alunos aprovados (nota >= 7)"></textarea>
+        <div class="loading-overlay" id="l-explicacao">
+          <div class="spinner"></div>
+          <div class="loading-texto">Gerando outros painis...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Portugus -->
+    <div class="tab-content" id="tab-portugues">
+      <div class="tab-panel">
+        <div class="tab-toolbar">
+          <span class="tab-toolbar-info">Escreva a lgica em pseudocdigo / Portugol.</span>
+          <div class="tab-toolbar-spacer"></div>
+          <button class="btn btn-success" onclick="gerar('portugues')">Gerar com IA</button>
+        </div>
+        <textarea id="t-portugues" placeholder="Ex:
+crie uma funo chamada filtrarPares
+  recebe um array de nmeros
+  para cada nmero, se for par, adiciona o dobro ao resultado
+  retorna o resultado"></textarea>
+        <div class="loading-overlay" id="l-portugues">
+          <div class="spinner"></div>
+          <div class="loading-texto">Gerando outros painis...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Sintaxe -->
+    <div class="tab-content" id="tab-sintaxe">
+      <div class="tab-panel">
+        <div class="tab-toolbar">
+          <span class="tab-toolbar-info">Cole cdigo para verificar erros.</span>
+          <div class="tab-toolbar-spacer"></div>
+          <button class="btn btn-success" onclick="gerar('sintaxe')">Verificar com IA</button>
+        </div>
+        <textarea id="t-sintaxe" placeholder="Cole cdigo aqui para verificar..."></textarea>
+        <div class="sintaxe-output" id="sintaxe-output" style="display:none"></div>
+        <div class="loading-overlay" id="l-sintaxe">
+          <div class="spinner"></div>
+          <div class="loading-texto">Verificando sintaxe...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Console -->
+    <div class="tab-content" id="tab-console">
+      <div class="console-topbar">
+        <span style="font-size:0.7rem;color:var(--success)">●</span>
+        <span class="console-title">Console</span>
+        <div class="console-topbar-spacer"></div>
+        <button class="btn-clear-console" onclick="limparConsole()">Limpar</button>
+      </div>
+      <div class="console-body" id="consoleBody">
+        <div class="console-empty" id="consoleEmpty">Nenhuma execuo. Escreva cdigo e clique em <strong style="color:var(--success)">Executar</strong>.</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ═══════════════════════════════════════════════
+     JAVASCRIPT
+     ═══════════════════════════════════════════════ -->
+<script>
+/* ═══════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════ */
+const paineis = ['codigo', 'explicacao', 'portugues', 'sintaxe'];
+let carregando = false;
+let _tempoRealAtivo = false;
+let _trDebounceTimer = null;
+let _explicacaoTimer = null;
+let _explicacaoAberta = false;
+let _trDot = null;
+
+const TR_DEBOUNCE_MS = 800;
+const EXPL_DEBOUNCE_MS = 2000;
+const AI_LIVE_DEBOUNCE_MS = 2500;
+
+/* ═══════════════════════════════════════════════
+   STATUS & LOADING
+   ═══════════════════════════════════════════════ */
+function setStatus(tipo, msg) {
+  document.getElementById('statusDot').className = 'status-dot ' + (tipo || '');
+  document.getElementById('statusMsg').textContent = msg;
+}
+
+function setLoading(alvos, ativo) {
+  alvos.forEach(a => {
+    const el = document.getElementById('l-' + a);
+    if (el) el.classList.toggle('ativo', ativo);
+  });
+  document.getElementById('btnGerar').disabled = ativo;
+  carregando = ativo;
+}
+
+/* ═══════════════════════════════════════════════
+   TABS
+   ═══════════════════════════════════════════════ */
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab[data-tab="' + name + '"]').classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+function setTabBadge(painelId, has) {
+  const badge = document.getElementById('badge-' + painelId);
+  if (badge) badge.classList.toggle('has-content', has);
+}
+
+/* ═══════════════════════════════════════════════
+   EXAMPLES
+   ═══════════════════════════════════════════════ */
+const EXAMPLES = {
+  hello: {
+    lang: 'javascript',
+    code: `// Ol Mundo em JavaScript
+function saudacao(nome) {
+  return 'Ol, ' + nome + '! Bem-vindo ao Code Lens.';
+}
+console.log(saudacao('Estudante'));`
+  },
+  loop: {
+    lang: 'javascript',
+    code: `// Loop e Condicionais
+for (let i = 1; i <= 20; i++) {
+  if (i % 2 === 0) {
+    console.log(i + ' eh par');
+  } else {
+    console.log(i + ' eh impar');
+  }
+}`
+  },
+  array: {
+    lang: 'javascript',
+    code: `// Manipulao de Array
+const notas = [7.5, 8.0, 6.5, 9.0, 5.0];
+const aprovados = notas
+  .filter(n => n >= 7)
+  .map(n => 'Nota: ' + n.toFixed(1))
+  .sort();
+
+console.log('Total de alunos:', notas.length);
+console.log('Aprovados:', aprovados.length);
+aprovados.forEach(a => console.log(a));`
+  },
+  funcoes: {
+    lang: 'javascript',
+    code: `// Funcoes e Closure
+function contador() {
+  let count = 0;
+  return {
+    incrementar: () => ++count,
+    decrementar: () => --count,
+    valor: () => count
+  };
+}
+
+const c = contador();
+c.incrementar();
+c.incrementar();
+c.incrementar();
+console.log('Valor atual:', c.valor());
+c.decrementar();
+console.log('Apos decremento:', c.valor());`
+  },
+  classes: {
+    lang: 'javascript',
+    code: `// Classes e Objetos
+class Animal {
+  constructor(nome, som) {
+    this.nome = nome;
+    this.som = som;
+  }
+  falar() {
+    return this.nome + ' fez ' + this.som + '!';
+  }
+}
+
+const cachorro = new Animal('Rex', 'Au au');
+const gato = new Animal('Mimi', 'Miau');
+console.log(cachorro.falar());
+console.log(gato.falar());`
+  },
+  async: {
+    lang: 'javascript',
+    code: `// Async / Await com Promises
+function esperar(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function cronometro() {
+  for (let i = 1; i <= 5; i++) {
+    await esperar(500);
+    console.log('Segundo ' + i);
+  }
+  console.log('Cronometro finalizado!');
+}
+
+cronometro();`
+  },
+  py_hello: {
+    lang: 'python',
+    code: `# Ola Mundo em Python
+def saudacao(nome: str) -> str:
+    return f'Ola, {nome}! Bem-vindo ao Code Lens.'
+
+print(saudacao('Estudante'))`
+  },
+  py_func: {
+    lang: 'python',
+    code: `# Funcoes com tipagem em Python
+def fibonacci(n: int) -> int:
+    """Retorna o n-esimo numero de Fibonacci."""
+    if n <= 1:
+        return n
+    return fibonacci(n - 1) + fibonacci(n - 2)
+
+for i in range(10):
+    print(f'Fib({i}) = {fibonacci(i)}')`
+  },
+  py_list: {
+    lang: 'python',
+    code: `# List Comprehension em Python
+numeros = list(range(1, 21))
+pares = [n for n in numeros if n % 2 == 0]
+quadrados = [n**2 for n in range(1, 11)]
+print('Pares 1-20:', pares)
+print('Quadrados 1-10:', quadrados)`
+  },
+  pt_algoritmo: {
+    lang: 'portugol',
+    code: `algoritmo "Nota do Aluno"
+var
+  nota1, nota2, media: real
+  nome: caracter
+inicio
+  nome <- "Maria"
+  nota1 <- 7.5
+  nota2 <- 8.0
+  media <- (nota1 + nota2) / 2
+
+  escreva("Aluno: ", nome)
+  escreva("Media: ", media)
+
+  se media >= 7 entao
+    escreva("Aprovado!")
+  senao
+    escreva("Reprovado")
+  fimse
+fimalgoritmo`
+  },
+  pt_loop: {
+    lang: 'portugol',
+    code: `algoritmo "Contador Regressivo"
+var
+  i: inteiro
+inicio
+  i <- 10
+  enquanto i >= 0 faca
+    escreva(i)
+    i <- i - 1
+  fimenquanto
+  escreva("Lancamento!")
+fimalgoritmo`
+  },
+  sql_basico: {
+    lang: 'sql',
+    code: `-- Consulta SQL: alunos aprovados
+SELECT nome, nota, disciplina
+FROM alunos
+WHERE nota >= 7
+ORDER BY nota DESC;`
+  }
+};
+
+function carregarExemplo() {
+  const sel = document.getElementById('exampleSelect');
+  const key = sel.value;
+  if (!key || !EXAMPLES[key]) return;
+  const ex = EXAMPLES[key];
+  document.getElementById('t-codigo').value = ex.code;
+  atualizarBadgeLinguagem(ex.lang);
+  atualizarHighlight();
+  limparResultados();
+}
+
+/* ═══════════════════════════════════════════════
+   LANGUAGE DETECTION
+   ═══════════════════════════════════════════════ */
+const PORTUGOL_TOKENS = [
+  /\bescreva\s*\(/i, /\bfimse\b/i, /\bfimalgoritmo\b/i, /\bfimenquanto\b/i,
+  /\bfimpara\b/i, /\bentao\b/i, /algoritmo\s*"/i, /(\w+)\s*<-\s*\S/,
+  /\bleia\s*\(\w/i, /:\s*(inteiro|real|logico|caracter)\b/i,
+  /\bfimfuncao\b/i, /\bfimprocedimento\b/i
+];
+
+function detectarLinguagem(codigo) {
+  if (!codigo || !codigo.trim()) return 'javascript';
+  var ptgScore = PORTUGOL_TOKENS.filter(function(p) { return p.test(codigo); }).length;
+  if (ptgScore >= 2) return 'portugol';
+  if (/^\s*(def |class |import |from \S+ import|elif |lambda )/m.test(codigo) ||
+     (/:\s*\n\s{2,}/.test(codigo) && /\bprint\s*\(/.test(codigo))) return 'python';
+  if (/\binterface\s+\w+/.test(codigo) ||
+      /\btype\s+\w+\s*=/.test(codigo) ||
+      (/:\s*(string|number|boolean|void|any|never|unknown)\b/.test(codigo) &&
+       /\b(const|let|var|function|class)\b/.test(codigo))) return 'typescript';
+  if (/[.#]?\w[\w-]*\s*\{[\s\S]*?:[\s\S]*?;/.test(codigo) ||
+      /@(media|keyframes|import|charset)\b/.test(codigo)) return 'css';
+  if (/\b(SELECT|INSERT|UPDATE|DELETE|CREATE TABLE|DROP TABLE|ALTER TABLE)\b/i.test(codigo)) return 'sql';
+  if (/<!DOCTYPE\s+html>/i.test(codigo) || /<html[\s>]/i.test(codigo)) return 'html';
+  return 'javascript';
+}
+
+function atualizarBadgeLinguagem(lang) {
+  const badge = document.getElementById('langBadge');
+  if (!badge) return;
+  const map = {
+    javascript: { cls: '',    txt: 'JS' },
+    typescript: { cls: 'ts',  txt: 'TS' },
+    python:     { cls: 'py',  txt: 'Python' },
+    css:        { cls: 'css', txt: 'CSS' },
+    sql:        { cls: 'sql', txt: 'SQL' },
+    html:       { cls: '',    txt: 'HTML' },
+    portugol:   { cls: 'ptg', txt: 'Portugol' }
+  };
+  const info = map[lang] || {};
+  badge.textContent = info.txt || lang;
+  badge.className = 'lang-badge' + (info.cls ? ' ' + info.cls : '');
+}
+
+/* ═══════════════════════════════════════════════
+   SYNTAX HIGHLIGHT
+   ═══════════════════════════════════════════════ */
+const HL_KEYWORDS = new Set([
+  'break','case','catch','class','const','continue','debugger','default',
+  'delete','do','else','export','extends','finally','for','from','function',
+  'if','import','in','instanceof','let','new','of','return','static',
+  'super','switch','throw','try','typeof','var','void','while','with','yield',
+  'async','await'
+]);
+const HL_BUILTINS = new Set([
+  'console','Math','Object','Array','String','Number','Boolean','Date','JSON',
+  'Promise','Map','Set','WeakMap','WeakSet','Symbol','Error','RegExp','Proxy',
+  'Reflect','parseInt','parseFloat','isNaN','isFinite','undefined','NaN',
+  'Infinity','globalThis','window','document','setTimeout','setInterval',
+  'clearTimeout','clearInterval','fetch','URL','URLSearchParams'
+]);
+
+function hlEsc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function tokenizarJS(src) {
+  let out = '', i = 0, n = src.length;
+  function span(cls, txt) { return '<span class="hl-' + cls + '">' + hlEsc(txt) + '</span>'; }
+  while (i < n) {
+    const ch = src[i];
+    if (ch === '/' && src[i+1] === '/') {
+      let j = i; while (j < n && src[j] !== '\n') j++;
+      out += span('comment', src.slice(i, j)); i = j; continue;
+    }
+    if (ch === '/' && src[i+1] === '*') {
+      let j = i + 2; while (j < n && !(src[j] === '*' && src[j+1] === '/')) j++;
+      j += 2; out += span('comment', src.slice(i, j)); i = j; continue;
+    }
+    if (ch === '`') {
+      let j = i + 1; while (j < n && src[j] !== '`') { if (src[j] === '\\') j++; j++; }
+      out += span('template', src.slice(i, ++j)); i = j; continue;
+    }
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < n && src[j] !== ch && src[j] !== '\n') { if (src[j] === '\\') j++; j++; }
+      out += span('string', src.slice(i, ++j)); i = j; continue;
+    }
+    if (/[0-9]/.test(ch) || (ch === '.' && /[0-9]/.test(src[i+1] || ''))) {
+      let j = i;
+      if (src[j] === '0' && (src[j+1] === 'x' || src[j+1] === 'X')) {
+        j += 2; while (j < n && /[0-9a-fA-F_]/.test(src[j])) j++;
+      } else {
+        while (j < n && /[0-9_]/.test(src[j])) j++;
+        if (j < n && src[j] === '.') { j++; while (j < n && /[0-9_]/.test(src[j])) j++; }
+        if (j < n && /[eE]/.test(src[j])) { j++; if (/[+-]/.test(src[j])) j++; while (j < n && /[0-9]/.test(src[j])) j++; }
+        if (j < n && src[j] === 'n') j++;
+      }
+      out += span('number', src.slice(i, j)); i = j; continue;
+    }
+    if (/[a-zA-Z_$]/.test(ch)) {
+      let j = i; while (j < n && /[a-zA-Z0-9_$]/.test(src[j])) j++;
+      const word = src.slice(i, j);
+      if (word === 'true' || word === 'false') out += span('boolean', word);
+      else if (word === 'null') out += span('null', word);
+      else if (word === 'undefined') out += span('null', word);
+      else if (HL_KEYWORDS.has(word)) out += span('keyword', word);
+      else if (HL_BUILTINS.has(word)) out += span('builtin', word);
+      else {
+        const last = out.slice(-1) === '.';
+        if (last) {
+          const next = src.slice(j).trimStart()[0];
+          out += span(next === '(' ? 'method' : 'property', word);
+        } else out += span('plain', word);
+      }
+      i = j; continue;
+    }
+    if (/[+\-*\/%&|^~<>=!?:,;.@#(){}\[\]`]/.test(ch)) {
+      let op = ch;
+      const three = src.slice(i, i+3);
+      const two = src.slice(i, i+2);
+      if (['===','!==','>>>','**=','||=','&&=','??='].includes(three)) op = three;
+      else if (['==','!=','<=','>=','=>','++','--','**','||','&&','??','?.','<<','>>','+=','-=','*=','/=','%=','&=','|=','^='].includes(two)) op = two;
+      out += span(/[(){}\[\]`]/.test(ch) ? 'punctuation' : 'operator', op);
+      i += op.length; continue;
+    }
+    out += hlEsc(ch); i++;
+  }
+  return out;
+}
+
+function atualizarHighlight() {
+  const ta = document.getElementById('t-codigo');
+  const back = document.getElementById('editorHlBack');
+  if (!ta || !back) return;
+  back.innerHTML = tokenizarJS(ta.value) + '\n';
+}
+
+function sincronizarScroll() {
+  const ta = document.getElementById('t-codigo');
+  const back = document.getElementById('editorHlBack');
+  if (!ta || !back) return;
+  back.scrollTop = ta.scrollTop;
+  back.scrollLeft = ta.scrollLeft;
+}
+
+/* ═══════════════════════════════════════════════
+   PORTUGOL TRANSPILER
+   ═══════════════════════════════════════════════ */
+function transpilarPortugol(src) {
+  var js = src;
+  js = js.replace(/^\s*algoritmo\s+"[^"]*"\s*\n?/gim, '');
+  js = js.replace(/^\s*programa\s*\{?/gim, '');
+  js = js.replace(/^\s*\}?\s*fimprograma\s*$/gim, '');
+  js = js.replace(/^\s*fimalgoritmo\s*$/gim, '');
+  js = js.replace(/^\s*inicio\s*$/gim, '');
+
+  js = js.replace(/^\s*var\s+([\w,\s]+)\s*:\s*(inteiro|real|logico|caracter|texto|string|boolean|integer|float)\s*$/gim,
+    function(_, vars) { return vars.split(',').map(function(v) { return 'let ' + v.trim() + ' = 0;'; }).join('\n'); });
+  js = js.replace(/^\s*var\s*$/gim, '');
+  js = js.replace(/^\s*([\w,\s]+)\s*:\s*(inteiro|real|logico|caracter|texto|string|boolean|integer|float)\s*$/gim,
+    function(_, vars) { return vars.split(',').map(function(v) { return 'let ' + v.trim() + ' = 0;'; }).join('\n'); });
+
+  js = js.replace(/(\w+)\s*<-\s*(.+)/g, '$1 = $2;');
+  js = js.replace(/\b(escreva|escreval|imprima)\s*\(/gi, 'console.log(');
+  js = js.replace(/\bleia\s*\(([^)]+)\)/gi, '/* leia($1): entrada nao disponivel */');
+  js = js.replace(/\bverdadeiro\b/gi, 'true');
+  js = js.replace(/\bfalso\b/gi, 'false');
+  js = js.replace(/\be\b(?!\w)/g, ' && ');
+  js = js.replace(/\bou\b/gi, ' || ');
+  js = js.replace(/\bnao\b(?!\w)/g, '!');
+
+  js = js.replace(/\bse\s*\(([^)]+)\)\s*entao\b/gi, 'if ($1) {');
+  js = js.replace(/\bse\s+(.+?)\s+entao\b/gi, 'if ($1) {');
+  js = js.replace(/\bsenao\b/gi, '} else {');
+  js = js.replace(/\bfimse\b/gi, '}');
+
+  js = js.replace(/\benquanto\s*\(([^)]+)\)\s*faca\b/gi,
+    function(_, cond) {
+      return '{ var __iter__ = 0; while (' + cond + ') { ' +
+        'if (++__iter__ > 10000) { console.error("⚠ Loop interrompido: limite de 10.000 iteracoes"); break; }';
+    });
+  js = js.replace(/\bfimenquanto\b/gi, '} }');
+
+  js = js.replace(/\brepita\b/gi, 'do {');
+  js = js.replace(/\bate\s*\(([^)]+)\)/gi, '} while (!($1));');
+
+  js = js.replace(/\bpara\s+(\w+)\s+de\s+(\S+)\s+ate\s+(\S+)(?:\s+passo\s+(\S+))?\s+faca\b/gi,
+    function(_, v, ini, fim, step) {
+      return 'for (let ' + v + ' = ' + ini + '; ' + v + ' <= ' + fim + '; ' + v + ' += ' + (step || '1') + ') {'; });
+  js = js.replace(/\bfimpara\b/gi, '}');
+
+  js = js.replace(/\b(funcao|procedimento)\s+(\w+)\s*\(([^)]*)\)/gi,
+    function(_, kw, name, params) {
+      var clean = params.replace(/:\s*\w+/g, '').replace(/\s+/g, ' ').trim();
+      return 'function ' + name + '(' + clean + ') {'; });
+  js = js.replace(/\b(fimfuncao|fimprocedimento)\b/gi, '}');
+
+  js = js.replace(/\bretorne\b/gi, 'return');
+  js = js.replace(/\n{3,}/g, '\n\n');
+  return js.trim();
+}
+
+/* ═══════════════════════════════════════════════
+   EXECUTAR JS
+   ═══════════════════════════════════════════════ */
+function executarJS(codigo) {
+  var logs = [];
+  var MAX_LOGS = 500;
+  var cf = {
+    log: function() { var a=[].slice.call(arguments); if(logs.length<MAX_LOGS) logs.push({tipo:'log',args:a}); },
+    warn: function() { var a=[].slice.call(arguments); if(logs.length<MAX_LOGS) logs.push({tipo:'warn',args:a}); },
+    error: function() { var a=[].slice.call(arguments); if(logs.length<MAX_LOGS) logs.push({tipo:'error',args:a}); },
+    info: function() { var a=[].slice.call(arguments); if(logs.length<MAX_LOGS) logs.push({tipo:'info',args:a}); },
+    table: function() { var a=[].slice.call(arguments); if(logs.length<MAX_LOGS) logs.push({tipo:'log',args:a}); },
+    dir: function() { var a=[].slice.call(arguments); if(logs.length<MAX_LOGS) logs.push({tipo:'info',args:a}); },
+  };
+  try {
+    var fn1 = new Function('console', 'return (function(){\n' + codigo + '\n})();');
+    return { logs: logs, resultado: fn1(cf), erro: null };
+  } catch (e1) {
+    if (e1 instanceof SyntaxError) return { logs: logs, resultado: undefined, erro: e1 };
+    try {
+      var fn2 = new Function('console', codigo);
+      return { logs: logs, resultado: fn2(cf), erro: null };
+    } catch (e2) { return { logs: logs, resultado: undefined, erro: e2 }; }
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   CONSOLE
+   ═══════════════════════════════════════════════ */
+function limparConsole() {
+  document.getElementById('consoleBody').innerHTML =
+    '<div class="console-empty" id="consoleEmpty">Console limpo.</div>';
+  setTabBadge('console', false);
+}
+
+function consoleAdd(tipo) {
+  var body = document.getElementById('consoleBody');
+  var empty = document.getElementById('consoleEmpty');
+  if (empty) empty.remove();
+  var prefixes = { log:'\u203A', error:'\u2716', warn:'\u26A0', info:'\u2139', result:'\u2190', lang:'#' };
+  var args = [].slice.call(arguments, 1);
+  var texto = args.map(function(a) {
+    if (a === null) return 'null';
+    if (a === undefined) return 'undefined';
+    if (typeof a === 'object') { try { return JSON.stringify(a, null, 2); } catch(e) { return String(a); } }
+    return String(a);
+  }).join(' ');
+  var entry = document.createElement('div');
+  entry.className = 'console-entry c-' + tipo;
+  entry.innerHTML = '<span class="console-prefix">' + (prefixes[tipo]||'\u203A') + '</span>' +
+    '<span class="console-text">' + escapeHtml(texto) + '</span>';
+  body.appendChild(entry);
+  body.scrollTop = body.scrollHeight;
+  setTabBadge('console', true);
+}
+
+function consoleSeparator() {
+  var body = document.getElementById('consoleBody');
+  var hr = document.createElement('hr');
+  hr.className = 'console-separator';
+  body.appendChild(hr);
+}
+
+function escapeHtml(t) {
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+/* ═══════════════════════════════════════════════
+   EXECUTAR CODIGO
+   ═══════════════════════════════════════════════ */
+function executarCodigo() {
+  var codigo = document.getElementById('t-codigo').value.trim();
+  if (!codigo) { setStatus('erro', 'Escreva codigo antes de executar.'); return; }
+  consoleSeparator();
+  var ts = new Date().toLocaleTimeString('pt-BR');
+  var rh = document.createElement('div');
+  rh.className = 'console-run-header';
+  rh.innerHTML = '<span>\\u25b6 Executando</span><span class="console-run-ts">' + ts + '</span>';
+  document.getElementById('consoleBody').appendChild(rh);
+
+  var lang = detectarLinguagem(codigo);
+  atualizarBadgeLinguagem(lang);
+  consoleAdd('lang', 'Linguagem: ' + lang);
+
+  var execResult;
+  if (lang === 'portugol') {
+    var jsEquiv = transpilarPortugol(codigo);
+    consoleAdd('info', '-- codigo transpilado --');
+    jsEquiv.split('\n').slice(0, 8).forEach(function(l) { if (l.trim()) consoleAdd('info', l); });
+    execResult = executarJS(jsEquiv);
+  } else if (lang === 'javascript' || lang === 'typescript') {
+    execResult = executarJS(codigo);
+  } else {
+    consoleAdd('warn', 'Execucao de "' + lang + '" nao disponivel no browser.');
+    consoleAdd('info', 'Use "Gerar com IA" para converter.');
+    setStatus('ok', 'Linguagem ' + lang + ' detectada — use Gerar com IA');
+    return;
+  }
+
+  var logs = execResult.logs, resultado = execResult.resultado, erro = execResult.erro;
+  if (!erro && logs.length === 0 && resultado === undefined) {
+    consoleAdd('info', 'Codigo executado sem saida.');
+  } else {
+    logs.forEach(function(e) { consoleAdd.apply(null, [e.tipo].concat(e.args)); });
+  }
+  if (erro) {
+    consoleAdd('error', erro.name + ': ' + erro.message);
+    setStatus('erro', erro.name + ': ' + erro.message);
+  } else {
+    if (resultado !== undefined && resultado !== null) consoleAdd('result', resultado);
+    setStatus('ok', 'Executado com sucesso');
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   GERAR COM IA
+   ═══════════════════════════════════════════════ */
+function promptCodigo(origem, conteudo) {
+  const map = {
+    explicacao: 'O usuario escreveu uma explicacao sobre o que um codigo deve fazer. Gere APENAS o codigo JavaScript correspondente, sem comentarios, sem explicacoes, sem markdown. Apenas o codigo puro.\n\nExplicacao: ' + conteudo,
+    portugues:  'O usuario escreveu pseudocodigo em portugues. Converta para codigo JavaScript real e funcional. Retorne APENAS o codigo, sem explicacoes.\n\nPseudocodigo: ' + conteudo,
+    sintaxe:    'O usuario mostrou um codigo com erros. Retorne APENAS o codigo corrigido, sem explicacoes.\n\nCodigo com erros: ' + conteudo
+  };
+  return map[origem];
+}
+
+function promptExplicacao(origem, conteudo) {
+  const map = {
+    codigo:    'Explique este codigo em portugues brasileiro de forma clara e didatica. Use paragrafos fluidos, sem listas. Envolva nomes de codigo em backticks.\n\nCodigo:\n```\n' + conteudo + '\n```',
+    portugues: 'O usuario escreveu pseudocodigo em portugues. Explique o que faz em portugues de forma clara.\n\nPseudocodigo: ' + conteudo,
+    sintaxe:   'O usuario mostrou um codigo com erros de sintaxe. Explique brevemente o que o codigo tenta fazer.\n\nCodigo:\n```\n' + conteudo + '\n```',
+    texto:     'O usuario descreveu em linguagem natural o que quer que um codigo faca. Explique de forma tecnica em portugues.\n\nDescricao: ' + conteudo
+  };
+  return map[origem] || map.texto;
+}
+
+function promptPortugues(origem, conteudo) {
+  const map = {
+    codigo:     'Converta este codigo para pseudocodigo em portugues brasileiro. Escreva a logica passo a passo em portugues, sem codigo real.\n\nCodigo:\n```\n' + conteudo + '\n```',
+    explicacao: 'O usuario escreveu uma explicacao. Converta para pseudocodigo em portugues estruturado, passo a passo.\n\nExplicacao: ' + conteudo,
+    sintaxe:    'O usuario mostrou um codigo com erros. Converta a intencao do codigo para pseudocodigo em portugues.\n\nCodigo:\n```\n' + conteudo + '\n```',
+    texto:      'O usuario descreveu algo que quer fazer. Converta para pseudocodigo em portugues estruturado.\n\nDescricao: ' + conteudo
+  };
+  return map[origem] || map.texto;
+}
+
+function promptSintaxe(origem, conteudo) {
+  const map = {
+    codigo: 'Analise este codigo e verifique se ha erros de sintaxe.\n\nSe NAO houver erros, responda EXATAMENTE:\n\u2705 Sem erros de sintaxe.\n\nSe HOUVER erros, responda neste formato EXATO:\n\u274c Linha X: descricao\n```\ncodigo com erro\n```\n\u2705 Forma correta:\n```\ncodigo corrigido\n```\nSeja conciso.\n\nCodigo:\n```\n' + conteudo + '\n```',
+    explicacao: 'O usuario descreveu uma funcionalidade. Gere o codigo JavaScript correspondente e verifique a sintaxe.\n\nDescricao: ' + conteudo,
+    portugues: 'O usuario escreveu pseudocodigo. Converta para JavaScript e verifique a sintaxe.\n\nPseudocodigo: ' + conteudo,
+    texto: 'O usuario descreveu algo. Gere o codigo JavaScript e verifique a sintaxe.\n\nDescricao: ' + conteudo
+  };
+  return map[origem] || map.texto;
+}
+
+async function gerar(origem) {
+  var conteudo = document.getElementById('t-' + origem).value.trim();
+  if (!conteudo) { setStatus('erro', 'Escreva algo antes de gerar.'); return; }
+
+  var alvos = paineis.filter(function(p) { return p !== origem; });
+  setLoading(alvos, true);
+  setStatus('loading', 'Gerando com IA...');
+
+  try {
+    var res = await fetch('/gerar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origem: origem, conteudo: conteudo })
+    });
+    var data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Erro desconhecido');
+
+    alvos.forEach(function(alvo) {
+      if (data[alvo] === undefined) return;
+      var ta = document.getElementById('t-' + alvo);
+      if (!ta) return;
+
+      if (alvo === 'codigo') {
+        // Gerou cdigo — vai para o editor da esquerda
+        ta.value = data[alvo];
+        atualizarBadgeLinguagem(detectarLinguagem(data[alvo]));
+        atualizarHighlight();
+        setTabBadge('codigo', true);
+      } else if (alvo === 'sintaxe') {
+        ta.value = data[alvo];
+        setTabBadge('sintaxe', true);
+        renderizarSintaxe(data[alvo]);
+      } else {
+        ta.value = data[alvo];
+        setTabBadge(alvo, true);
+        marcarConteudo(alvo);
+      }
+    });
+
+    setStatus('ok', 'Gerado com sucesso!');
+  } catch (err) {
+    setStatus('erro', 'Erro: ' + err.message);
+  } finally {
+    setLoading(alvos, false);
+  }
+}
+
+function marcarConteudo(id) {
+  var ta = document.getElementById('t-' + id);
+  if (ta && ta.value.trim()) {
+    setTabBadge(id, true);
+  }
+}
+
+function limparResultados() {
+  ['explicacao', 'portugues', 'sintaxe'].forEach(function(id) {
+    var ta = document.getElementById('t-' + id);
+    if (ta) ta.value = '';
+    setTabBadge(id, false);
+  });
+  var sintOut = document.getElementById('sintaxe-output');
+  if (sintOut) { sintOut.innerHTML = ''; sintOut.style.display = 'none'; }
+}
+
+function limparTudo() {
+  document.getElementById('t-codigo').value = '';
+  limparResultados();
+  limparConsole();
+  atualizarHighlight();
+  atualizarBadgeLinguagem('javascript');
+  setStatus('', 'Pronto');
+  document.getElementById('exampleSelect').value = '';
+}
+
+function limparTudo() {
+  document.getElementById('t-codigo').value = '';
+  limparResultados();
+  limparConsole();
+  atualizarHighlight();
+  atualizarBadgeLinguagem('javascript');
+  setStatus('', 'Pronto');
+  document.getElementById('exampleSelect').value = '';
+}
+
+/* ═══════════════════════════════════════════════
+   RENDERIZAR SINTAXE
+   ═══════════════════════════════════════════════ */
+function renderizarSintaxe(texto) {
+  var out = document.getElementById('sintaxe-output');
+  if (!out) return;
+
+  function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ── Validacao real (JS / TS) ──
+  var codigoTeste = document.getElementById('t-codigo').value.trim() || texto;
+  var lang = detectarLinguagem(codigoTeste);
+  if (['javascript','typescript'].includes(lang)) {
+    var execResult = executarJS(codigoTeste);
+    if (!execResult.erro) {
+      out.className = 'sintaxe-output visivel';
+      out.innerHTML = '<div class="real-exec-badge ok">✅ Codigo executado sem erros</div>' +
+        '<div class="texto-simples" style="color:var(--muted);font-size:0.73rem;margin-top:6px">Validado por execucao real — nao apenas analise.</div>';
+      setTabBadge('sintaxe', true);
+      return;
+    }
+  }
+  if (lang === 'portugol') {
+    var jsEquiv = transpilarPortugol(codigoTeste);
+    var er = executarJS(jsEquiv);
+    out.className = 'sintaxe-output visivel';
+    if (!er.erro) {
+      out.innerHTML = '<div class="real-exec-badge ok">✅ Portugol valido — sem erros</div>';
+    } else {
+      out.innerHTML = '<div class="real-exec-badge err">✖ Erro: ' + er.erro.message + '</div>';
+    }
+    setTabBadge('sintaxe', true);
+    return;
+  }
+
+  // ── Sem erros (IA) ──
+  if (/sem erros/i.test(texto) || texto.trim().startsWith('✅ Sem')) {
+    out.className = 'sintaxe-output visivel';
+    out.innerHTML = '<div class="badge-ok">✅ Sem erros de sintaxe</div>';
+    setTabBadge('sintaxe', true);
+    return;
+  }
+
+  // ── Parse inteligente do formato didático ──
+  var html = '';
+  var linhas = texto.split('\n');
+  var i = 0;
+  var n = linhas.length;
+
+  while (i < n) {
+    var linha = linhas[i];
+    var trim = linha.trim();
+
+    // ── Bloco de erro didático ──
+    var matchLinha = trim.match(/^📍\s*Linha\s+(\d+)\s*[—–-]\s*(.*)/);
+    if (matchLinha) {
+      var numLinha = matchLinha[1];
+      var trechoErro = matchLinha[2] || '';
+      var explicacao = '';
+      var correcao = '';
+      i++;
+
+      // Procura Explicação:
+      while (i < n) {
+        var t = linhas[i].trim();
+        var matchExp = /^Explicação\s*:\s*(.*)/i.exec(t);
+        if (matchExp) { explicacao = matchExp[1]; i++; break; }
+        matchExp = /^Explicacao\s*:\s*(.*)/i.exec(t);
+        if (matchExp) { explicacao = matchExp[1]; i++; break; }
+        if (/^📍\s*Linha/i.test(t)) break;
+        if (/^✅\s*Codigo/i.test(t) || /^✅\s*Código/i.test(t)) break;
+        i++;
+      }
+
+      // Procura Correção:
+      while (i < n) {
+        var t2 = linhas[i].trim();
+        var matchCorr = /^Correção\s*:\s*"(.*)"/i.exec(t2);
+        if (!matchCorr) matchCorr = /^Correcao\s*:\s*"(.*)"/i.exec(t2);
+        if (!matchCorr) matchCorr = /^Correção\s*:\s*(.*)/i.exec(t2);
+        if (!matchCorr) matchCorr = /^Correcao\s*:\s*(.*)/i.exec(t2);
+        if (matchCorr) { correcao = matchCorr[1]; i++; break; }
+        if (/^📍\s*Linha/i.test(t2)) break;
+        if (/^✅\s*Codigo/i.test(t2) || /^✅\s*Código/i.test(t2)) break;
+        i++;
+      }
+
+      // Monta card do erro
+      html += '<div class="erro-card">';
+      html += '<div class="erro-card-header">';
+      html += '<span class="erro-card-linha">Linha ' + numLinha + '</span>';
+      html += '</div>';
+
+      if (trechoErro.trim()) {
+        var trechoLimpo = trechoErro.replace(/^[""'']/, '').replace(/[""'']$/, '');
+        html += '<div class="erro-card-orig">' + esc(trechoLimpo) + '</div>';
+      }
+      if (explicacao.trim()) {
+        html += '<div class="erro-card-explicacao">' + esc(explicacao).replace(/\n/g, '<br>') + '</div>';
+      }
+      if (correcao.trim()) {
+        html += '<div class="erro-card-correcao-label">✅ Correção:</div>';
+        var corrLimpo = correcao.replace(/^[""'']/, '').replace(/[""'']$/, '');
+        html += '<div class="erro-card-correcao">' + esc(corrLimpo) + '</div>';
+      }
+      html += '</div>';
+      continue;
+    }
+
+    // ── Bloco de código ``` ──
+    if (trim.startsWith('```')) {
+      var ehCorrigido = /Código\s+corrigido|Codigo\s+corrigido/.test(texto);
+      i++;
+      var codigo = '';
+      while (i < n && !linhas[i].trim().startsWith('```')) { codigo += linhas[i] + '\n'; i++; }
+      if (i < n) i++;
+      html += '<pre class="' + (ehCorrigido ? 'pre-ok' : 'pre-erro') + '">' + esc(codigo.trimEnd()) + '</pre>';
+      continue;
+    }
+
+    // ── ✅ Código corrigido label ──
+    if (trim.match(/^✅\s*Código\s+corrigido/i) || trim.match(/^✅\s*Codigo\s+corrigido/i)) {
+      html += '<div class="erro-card-correcao-label" style="margin-top:16px">' + esc(trim) + '</div>';
+      i++; continue;
+    }
+
+    // ── ✅ geral ──
+    if (trim.startsWith('✅')) {
+      html += '<div class="label-correto">' + esc(trim) + '</div>';
+      i++; continue;
+    }
+
+    // ── ❌ geral (fallback) ──
+    if (trim.startsWith('❌')) {
+      html += '<div class="erro-linha">' + esc(trim) + '</div>';
+      i++; continue;
+    }
+
+    // ── Texto normal ──
+    if (trim) {
+      html += '<div class="texto-simples">' + esc(trim) + '</div>';
+    }
+    i++;
+  }
+
+  if (!html.trim()) html = '<div class="texto-simples">' + esc(texto) + '</div>';
+
+  out.className = 'sintaxe-output visivel';
+  out.innerHTML = html;
+  setTabBadge('sintaxe', true);
+}
+
+/* ═══════════════════════════════════════════════
+   TEMPO REAL
+   ═══════════════════════════════════════════════ */
+function toggleTempoReal() {
+  _tempoRealAtivo = !_tempoRealAtivo;
+  var btn = document.getElementById('btnTempoReal');
+  var dot = document.getElementById('trDot');
+  btn.classList.toggle('ativo', _tempoRealAtivo);
+  if (dot) dot.style.background = _tempoRealAtivo ? 'var(--success)' : 'var(--dim)';
+  if (!_tempoRealAtivo) {
+    clearTimeout(_trDebounceTimer);
+    clearTimeout(_aiLiveTimer);
+  } else {
+    executarTempoReal();
+  }
+}
+
+function agendarExecucaoTempoReal() {
+  if (!_tempoRealAtivo) return;
+  clearTimeout(_trDebounceTimer);
+  _trDebounceTimer = setTimeout(executarTempoReal, TR_DEBOUNCE_MS);
+}
+
+function executarTempoReal() {
+  if (!_tempoRealAtivo) return;
+  var codigo = document.getElementById('t-codigo').value.trim();
+  if (!codigo) { limparConsole(); return; }
+  limparConsole();
+  atualizarBadgeLinguagem(detectarLinguagem(codigo));
+  var lang = detectarLinguagem(codigo);
+  var execResult;
+  if (lang === 'portugol') {
+    execResult = executarJS(transpilarPortugol(codigo));
+  } else if (lang === 'javascript' || lang === 'typescript') {
+    execResult = executarJS(codigo);
+  } else {
+    consoleAdd('info', 'Linguagem ' + lang + ' — execucao nao disponivel no browser.');
+    return;
+  }
+  var logs = execResult.logs, resultado = execResult.resultado, erro = execResult.erro;
+  if (!erro && logs.length === 0 && resultado === undefined) consoleAdd('info', 'Sem saida.');
+  else logs.forEach(function(e) { consoleAdd(e.tipo, ...e.args); });
+  if (erro) consoleAdd('error', erro.name + ': ' + erro.message);
+  else if (resultado !== undefined && resultado !== null) consoleAdd('result', resultado);
+
+  agendarExplicacaoAuto(codigo);
+  agendarAILive(codigo);
+}
+
+/* ═══════════════════════════════════════════════
+   EXPLICACAO AUTO
+   ═══════════════════════════════════════════════ */
+function toggleExplicacaoAuto() {
+  _explicacaoAberta = !_explicacaoAberta;
+  var body = document.getElementById('explicacaoAutoBody');
+  var toggle = document.getElementById('explicacaoAutoToggle');
+  if (body) body.classList.toggle('aberto', _explicacaoAberta);
+  if (toggle) toggle.textContent = _explicacaoAberta ? '▼ fechar' : '▲ ver';
+}
+
+function mostrarExplicacaoAuto(html) {
+  var wrap = document.getElementById('explicacaoAutoWrap');
+  var body = document.getElementById('explicacaoAutoBody');
+  if (!wrap || !body) return;
+  wrap.classList.add('visivel');
+  body.innerHTML = html;
+  if (!_explicacaoAberta) {
+    _explicacaoAberta = true;
+    body.classList.add('aberto');
+    var t = document.getElementById('explicacaoAutoToggle');
+    if (t) t.textContent = '▼ fechar';
+  }
+}
+
+function agendarExplicacaoAuto(codigo) {
+  clearTimeout(_explicacaoTimer);
+  _explicacaoTimer = setTimeout(function() { gerarExplicacaoAuto(codigo); }, EXPL_DEBOUNCE_MS);
+}
+
+async function gerarExplicacaoAuto(codigo) {
+  if (!codigo || !codigo.trim()) return;
+  mostrarExplicacaoAuto('<div class="exp-auto-loading"><div class="ea-spinner"></div><span>Gerando explicacao...</span></div>');
+  try {
+    var res = await fetch('/gerar-explicacao-auto', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codigo: codigo })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var data = await res.json();
+    if (data.error) throw new Error(data.error);
+    mostrarExplicacaoAuto('<span style="opacity:.55;font-size:.7rem">🤖 Ollama</span><br>' +
+      (data.explicacao || '').replace(/\n/g, '<br>'));
+  } catch(err) {
+    mostrarExplicacaoAuto('<span style="color:var(--muted);font-size:.78rem">⚠ Erro: ' + err.message + '</span>');
+  }
+}
+
+let _aiLiveTimer = null;
+function agendarAILive(codigo) {
+  if (!_tempoRealAtivo) return;
+  clearTimeout(_aiLiveTimer);
+  _aiLiveTimer = setTimeout(function() { atualizarTodosPaineisIA(codigo); }, AI_LIVE_DEBOUNCE_MS);
+}
+
+async function atualizarTodosPaineisIA(codigo) {
+  if (!codigo || !codigo.trim() || !_tempoRealAtivo || carregando) return;
+  try {
+    var res = await fetch('/gerar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origem: 'codigo', conteudo: codigo })
+    });
+    if (!res.ok) return;
+    var data = await res.json();
+    if (data.error) return;
+    ['explicacao','portugues','sintaxe'].forEach(function(alvo) {
+      if (data[alvo] === undefined) return;
+      var ta = document.getElementById('t-' + alvo);
+      var empty = document.getElementById('empty-' + alvo);
+      if (ta) { ta.value = data[alvo]; ta.style.display = 'block'; }
+      if (empty) empty.style.display = 'none';
+      setTabBadge(alvo, true);
+      if (alvo === 'sintaxe') renderizarSintaxe(data[alvo]);
+    });
+  } catch(err) {}
+}
+
+/* ═══════════════════════════════════════════════
+   EVENT LISTENERS
+   ═══════════════════════════════════════════════ */
+paineis.forEach(function(id) {
+  var ta = document.getElementById('t-' + id);
+  if (!ta) return;
+  ta.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'Enter') {
+      e.preventDefault();
+      // Se for tab ativa, gera a partir dela
+      gerar(id);
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      var s = e.target, st = s.selectionStart;
+      s.value = s.value.substring(0, st) + '  ' + s.value.substring(s.selectionEnd);
+      s.selectionStart = s.selectionEnd = st + 2;
+    }
+  });
+});
+
+document.getElementById('t-codigo').addEventListener('input', function() {
+  atualizarHighlight();
+  agendarExecucaoTempoReal();
+  var v = this.value;
+  if (v.trim()) atualizarBadgeLinguagem(detectarLinguagem(v));
+});
+document.getElementById('t-codigo').addEventListener('scroll', sincronizarScroll);
+document.getElementById('t-codigo').addEventListener('keydown', function(e) {
+  if (e.ctrlKey && e.shiftKey && e.key === 'Enter') {
+    e.preventDefault();
+    executarCodigo();
+  }
+});
+
+// Patch textarea.value para sync highlight quando IA preenche
+;(function() {
+  var ta = document.getElementById('t-codigo');
+  if (!ta) return;
+  var desc = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+  if (!desc) return;
+  Object.defineProperty(ta, 'value', {
+    get: function() { return desc.get.call(this); },
+    set: function(v) {
+      desc.set.call(this, v);
+      requestAnimationFrame(function() {
+        atualizarHighlight();
+        sincronizarScroll();
+      });
+    },
+    configurable: true
+  });
+})();
+
+// Init
+atualizarHighlight();
+</script>
+</body>
+</html>
